@@ -121,30 +121,37 @@ void A_output(struct msg message)
 
 void A_input(struct pkt packet)
 {
-  int ackcount = 0;
-  int i;
-
+  /*int ackcount = 0;
+  int i; */
+  /* comment on unused */
   /* if received ACK is not corrupted */ 
   if (!IsCorrupted(packet)) {
     if (TRACE > 0)
       printf("----A: uncorrupted ACK %d is received\n",packet.acknum);
-      
-    new_ACKs++;
-    acked[packet.acknum] = true; /* mark the ACK as received */
 
-    if (packet.acknum == buffer[windowfirst].seqnum) /*only slide window if this is the last packet in window*/
-    {
-      while (acked[buffer[windowfirst].seqnum] && windowcount > 0)
+    if (!acked[packet.acknum]){
+      if (TRACE > 0)
+        printf("----A: ACK %d is received, update window!\n",packet.acknum);
+
+      new_ACKs++;
+      acked[packet.acknum] = true; /* mark the ACK as received */
+
+      if (packet.acknum == buffer[windowfirst].seqnum) /*only slide window if this is the last packet in window*/
       {
-        windowfirst = (windowfirst + 1) % WINDOWSIZE; /* move window first to next packet */
-        windowcount--;
-      }
+        while (acked[buffer[windowfirst].seqnum] && windowcount > 0)
+        {
+          windowfirst = (windowfirst + 1) % WINDOWSIZE; /* move window first to next packet */
+          windowcount--;
+        }
 
-      stoptimer(A); /* run timer again when unacked pakcets exists in window */
-      if (windowcount > 0)
-        starttimer(A, RTT); /* start timer for the first unacked packet */
+        stoptimer(A); /* run timer again when unacked pakcets exists in window */
+        if (windowcount > 0)
+          starttimer(A, RTT); /* start timer for the first unacked packet */
+      }
     }
-    }
+    else if (TRACE > 0)
+      printf ("----A: duplicate ACK received, do nothing!\n");
+  }
   else if (TRACE > 0)
     printf ("----A: corrupted ACK is received, do nothing!\n");
 }
