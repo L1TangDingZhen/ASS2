@@ -157,22 +157,26 @@ void A_input(struct pkt packet)
 }
 
 /* called when A's timer goes off */
+/*1. int i; whole window not need to be sent in SR, no need of circulate */
+/*2.buffer[(windowfirst+i) % WINDOWSIZE] -> buffer[windowfirst] GBN will resend all packet in window, In SR, only the speicial packet AKA first packet will be resented*/
+/*3. A,buffer[(windowfirst+i) % WINDOWSIZE]-> buffer[windowfirst], GBN will resend all when overrun, SR will only resent unacked packet, only resend first unacked packet*/
+/*4. if (i==0) starttimer(A,RTT) -> if (windowcount > 0)starttimer(A,RTT);. timer needed if there is unacked packet in window */
+
 void A_timerinterrupt(void)
 {
-  int i;
+  /* int i; */
 
   if (TRACE > 0)
     printf("----A: time out,resend packets!\n");
+    /*printf ("---A: resending packet %d\n", (buffer[(windowfirst+i) % WINDOWSIZE]).seqnum);*/
+    printf ("---A: resending packet %d\n", buffer[windowfirst].seqnum);
 
-  for(i=0; i<windowcount; i++) {
-
-    if (TRACE > 0)
-      printf ("---A: resending packet %d\n", (buffer[(windowfirst+i) % WINDOWSIZE]).seqnum);
-
-    tolayer3(A,buffer[(windowfirst+i) % WINDOWSIZE]);
-    packets_resent++;
-    if (i==0) starttimer(A,RTT);
-  }
+  /*tolayer3(A,buffer[(windowfirst+i) % WINDOWSIZE]);*/
+  tolayer3(A,buffer[windowfirst]); /* resend the first packet in the window */
+  packets_resent++;
+  /* if (i==0) starttimer(A,RTT);*/
+  if (windowcount > 0) /* start timer for the first unacked packet */
+    starttimer(A,RTT);
 }       
 
 
