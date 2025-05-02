@@ -130,9 +130,9 @@ void A_input(struct pkt packet)
       printf("----A: uncorrupted ACK %d is received\n",packet.acknum);
 
     if (!acked[packet.acknum]){
-      if (TRACE > 0)
+      if (TRACE > 0){
         printf("----A: ACK %d is received, update window!\n",packet.acknum);
-
+      }
       new_ACKs++;
       acked[packet.acknum] = true; /* mark the ACK as received */
 
@@ -166,10 +166,11 @@ void A_timerinterrupt(void)
 {
   /* int i; */
 
-  if (TRACE > 0)
+  if (TRACE > 0){
     printf("----A: time out,resend packets!\n");
     /*printf ("---A: resending packet %d\n", (buffer[(windowfirst+i) % WINDOWSIZE]).seqnum);*/
     printf ("---A: resending packet %d\n", buffer[windowfirst].seqnum);
+  }
 
   /*tolayer3(A,buffer[(windowfirst+i) % WINDOWSIZE]);*/
   tolayer3(A,buffer[windowfirst]); /* resend the first packet in the window */
@@ -200,9 +201,19 @@ void A_init(void)
 /********* Receiver (B)  variables and procedures ************/
 
 static int expectedseqnum; /* the sequence number expected next by the receiver */
-static int B_nextseqnum;   /* the sequence number for the next packets sent by B */
+/* static int B_nextseqnum;    the sequence number for the next packets sent by B */
+/* no next sequence number needed in SR*/
+/* two arrays used for track and store the package received */
+static bool isPacketReceived[SEQSPACE]; /* array to keep track of which packets have been received */
+static struct pkt receivedPackets[SEQSPACE]; /* array to keep track of the packets that have been received */
 
-
+/*
+1. set up two arrays, in SP, the receiver needs to cache the disorder packets, so we need to set up a array to track the received packets. IN GBN, all disorder package will be abandoned.
+2. GBN only accept the in order package, SR can accepte the disorder package, cache it and wait for the missing package to arrive.
+3. added the packet store mechanism
+4. in order delivery mechanism
+5. SR: the reciever can accept the disorder package, ACK for each correct package, delivery the package to upper layer
+*/
 /* called from layer 3, when a packet arrives for layer 4 at B*/
 void B_input(struct pkt packet)
 {
@@ -210,53 +221,90 @@ void B_input(struct pkt packet)
   int i;
 
   /* if not corrupted and received packet is in order */
-  if  ( (!IsCorrupted(packet))  && (packet.seqnum == expectedseqnum) ) {
-    if (TRACE > 0)
-      printf("----B: packet %d is correctly received, send ACK!\n",packet.seqnum);
+  if  (!IsCorrupted(packet)) {
     packets_received++;
+    /* (!IsCorrupted(packet))  && (packet.seqnum == expectedseqnum) -> !IsCorrupted(packet) any package will be recieved and stored */
+
+    /* SR wil store the package */
+    /* package store logic */
+    if (isPacketReceived[packet.seqnum] == false) {
+      isPacketReceived[packet.seqnum] = true; /* mark the packet as received */
+      for (i = 0; i < 20; i++){
+        receivedPackets[packet.seqnum].payload[i] = packet.payload[i]; /* store the received packet payload */
+      }
+    }
+
+    /* in order dilivery mechanism */
+    while (isPacketReceived[expectedseqnum]== true) {
+      /* deliver to receiving application */
+      tolayer5(B, receivedPackets[expectedseqnum].payload);
+      isPacketReceived[expectedseqnum] = false; /* mark the packet as not received */
+      expectedseqnum = (expectedseqnum + 1) % SEQSPACE; /* move to the next expected sequence number */
+    }
+
+    sendpkt.acknum = packet.seqnum; /* send ACK for the received packet */
+    sendpkt.seqnum =NOTINUSE; /* set seqnum to NOTINUSE as B does not send data */
+
+    for( i=0; i<20 ; i++ )
+    {
+      sendpkt.payload[i] = '0';
+    }
+
+    sendpkt.checksum = ComputeChecksum(sendpkt); /* compute checksum */
+
+    tolayer3 (B, sendpkt); /* send out packet */
 
     /* deliver to receiving application */
-    tolayer5(B, packet.payload);
+    /*tolayer5(B, packet.payload);*/
 
     /* send an ACK for the received packet */
-    sendpkt.acknum = expectedseqnum;
+    /*sendpkt.acknum = expectedseqnum;*/
 
     /* update state variables */
-    expectedseqnum = (expectedseqnum + 1) % SEQSPACE;        
+    /*expectedseqnum = (expectedseqnum + 1) % SEQSPACE; */       
   }
   else {
     /* packet is corrupted or out of order resend last ACK */
-    if (TRACE > 0) 
-      printf("----B: packet corrupted or not expected sequence number, resend ACK!\n");
-    if (expectedseqnum == 0)
-      sendpkt.acknum = SEQSPACE - 1;
-    else
-      sendpkt.acknum = expectedseqnum - 1;
+    /* if (TRACE > 0) */
+    /*   printf("----B: packet corrupted or not expected sequence number, resend ACK!\n");*/
+    /* if (expectedseqnum == 0)*/
+    /*  sendpkt.acknum = SEQSPACE - 1;*/
+    /*else*/
+    /*  sendpkt.acknum = expectedseqnum - 1;*/
   }
 
   /* create packet */
-  sendpkt.seqnum = B_nextseqnum;
-  B_nextseqnum = (B_nextseqnum + 1) % 2;
+  /* sendpkt.seqnum = B_nextseqnum;*/
+  /* B_nextseqnum = (B_nextseqnum + 1) % 2;*/
     
   /* we don't have any data to send.  fill payload with 0's */
-  for ( i=0; i<20 ; i++ ) 
-    sendpkt.payload[i] = '0';  
+  /* for ( i=0; i<20 ; i++ ) */
+    /* sendpkt.payload[i] = '0';  */
 
   /* computer checksum */
-  sendpkt.checksum = ComputeChecksum(sendpkt); 
+  /* sendpkt.checksum = ComputeChecksum(sendpkt); */
 
   /* send out packet */
-  tolayer3 (B, sendpkt);
+  /* tolayer3 (B, sendpkt);*/
 }
+
+/* In SR, nothing to do with the damaged package, no ack*/
+/* B is receiver, package sequence number is NOTINUSE*/
+/* SR no response for damaged package, ACK for undamaged package including disorder package */
+
+
+
+
+
 
 /* the following routine will be called once (only) before any other */
 /* entity B routines are called. You can use it to do any initialization */
 void B_init(void)
 {
   expectedseqnum = 0;
-  B_nextseqnum = 1;
+  /*B_nextseqnum = 1;*/
 }
-
+/* no need for sequence number in SR */
 /******************************************************************************
  * The following functions need be completed only for bi-directional messages *
  *****************************************************************************/
