@@ -131,7 +131,9 @@ void A_input(struct pkt packet)
 
     if (!acked[packet.acknum]){
       if (TRACE > 0){
-        printf("----A: ACK %d is received, update window!\n",packet.acknum);
+        /*printf("----A: ACK %d is received, update window!\n",packet.acknum);*/
+        printf("----A: ACK %d is not a duplicate\n",packet.acknum);
+        /* cue error, bug fixed */
       }
       new_ACKs++;
       acked[packet.acknum] = true; /* mark the ACK as received */
