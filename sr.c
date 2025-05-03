@@ -224,6 +224,9 @@ void B_input(struct pkt packet)
 
   /* if not corrupted and received packet is in order */
   if  (!IsCorrupted(packet)) {
+    if (TRACE > 0)
+      printf("----B: packet %d is correctly received, send ACK!\n",packet.seqnum);
+    /* missing a cue */
     packets_received++;
     /* (!IsCorrupted(packet))  && (packet.seqnum == expectedseqnum) -> !IsCorrupted(packet) any package will be recieved and stored */
 
